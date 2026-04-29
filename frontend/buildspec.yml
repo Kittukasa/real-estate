@@ -24,10 +24,10 @@ phases:
       - echo Pushing image to ECR...
       - docker push $FULL_IMAGE_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION
       - docker push $FULL_IMAGE_URI:latest
+      - cd ..
       - printf '[{"name":"%s","imageUri":"%s"}]' $ECR_REPO_NAME $FULL_IMAGE_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION > imagedefinitions.json
 
 artifacts:
   files:
     - imagedefinitions.json
-  base-directory: frontend
   discard-paths: yes
