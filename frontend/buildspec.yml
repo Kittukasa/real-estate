@@ -1,0 +1,72 @@
+version: 0.2
+
+# ── Environment variables injected by CodePipeline / CodeBuild project ──────────
+# AWS_ACCOUNT_ID  – your 12-digit account ID
+# AWS_DEFAULT_REGION  – e.g. ap-south-1
+# ECR_REPO_NAME  – e.g. real-estate-frontend
+# IMAGE_TAG  – optional override; defaults to the CodeBuild resolved source version (git SHA)
+
+env:
+  variables:
+    IMAGE_TAG: $CODEBUILD_RESOLVED_SOURCE_VERSION   # git commit SHA → unique, traceable tag
+
+phases:
+
+  # ── 1. Install phase (runs once, layer-cached) ─────────────────────────────
+  install:
+    runtime-versions:
+      nodejs: 18
+    commands:
+      - echo "=== Install phase ==="
+      - aws --version
+      - node --version
+      - npm --version
+
+  # ── 2. Pre-build – ECR login ───────────────────────────────────────────────
+  pre_build:
+    commands:
+      - echo "=== Pre-build: logging in to ECR ==="
+      - ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_URI
+      - FULL_IMAGE_URI="${ECR_URI}/${ECR_REPO_NAME}"
+      - echo "Image will be pushed to → $FULL_IMAGE_URI"
+
+  # ── 3. Build – Docker multi-stage build ───────────────────────────────────
+  build:
+    commands:
+      - echo "=== Build: building Docker image ==="
+      - |
+        docker build \
+          --tag "${FULL_IMAGE_URI}:${IMAGE_TAG}" \
+          --tag "${FULL_IMAGE_URI}:latest" \
+          .
+
+  # ── 4. Post-build – push to ECR + write imagedefinitions.json ────────────
+  post_build:
+    commands:
+      - echo "=== Post-build: pushing image to ECR ==="
+      - docker push "${FULL_IMAGE_URI}:${IMAGE_TAG}"
+      - docker push "${FULL_IMAGE_URI}:latest"
+
+      # imagedefinitions.json tells CodePipeline which container+image to update
+      # CONTAINER_NAME must match the name in your ECS Task Definition
+      - echo "=== Writing imagedefinitions.json ==="
+      - |
+        printf '[{"name":"%s","imageUri":"%s"}]' \
+          "${ECR_REPO_NAME}" \
+          "${FULL_IMAGE_URI}:${IMAGE_TAG}" \
+          > imagedefinitions.json
+      - cat imagedefinitions.json
+
+      - echo "=== Build complete ==="
+
+# ── Artifacts passed to the Deploy stage ──────────────────────────────────────
+artifacts:
+  files:
+    - imagedefinitions.json   # consumed by the ECS deploy action
+  discard-paths: yes
+
+# ── Cache node_modules between builds (speeds up npm ci) ──────────────────────
+cache:
+  paths:
+    - node_modules/**/*
