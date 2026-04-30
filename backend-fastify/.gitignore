@@ -2,3 +2,7 @@
 /uploads/*
 !/uploads/placeholder.jpeg
 .env
+node_modules
+.git
+*.md
+uploads

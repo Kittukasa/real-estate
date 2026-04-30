@@ -1,0 +1,32 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 18
+
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_URI
+      - FULL_IMAGE_URI="${ECR_URI}/${ECR_REPO_NAME}"
+
+  build:
+    commands:
+      - echo Building Docker image...
+      - cd backend-fastify
+      - docker build -t $FULL_IMAGE_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION .
+      - docker tag $FULL_IMAGE_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION $FULL_IMAGE_URI:latest
+
+  post_build:
+    commands:
+      - echo Pushing image to ECR...
+      - docker push $FULL_IMAGE_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      - docker push $FULL_IMAGE_URI:latest
+      - printf '[{"name":"%s","imageUri":"%s"}]' $ECR_REPO_NAME $FULL_IMAGE_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION > $CODEBUILD_SRC_DIR/imagedefinitions.json
+
+artifacts:
+  files:
+    - imagedefinitions.json
+  discard-paths: yes
