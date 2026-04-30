@@ -1,10 +1,10 @@
 export const environment = {
   production: true,
   api: {
-    server: 'http://13.234.75.187:5000/',
+    server: 'http://13.235.255.27:5000/',
     mapKey: '',
     googleAuthClientId: '',
-    webSocketUrl: 'ws://13.234.75.187:5000/websocket',
+    webSocketUrl: 'ws://13.235.255.27:5000/websocket',
   },
   map: {
     tiles: {
